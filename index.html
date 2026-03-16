@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>球星卡开包互动</title>
+    <script src="https://cdn.staticfile.net/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --card-w: 225px;
+            --card-h: 400px;
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background: #0a0a0a; overflow: hidden;
+            display: flex; justify-content: center; align-items: center;
+            font-family: -apple-system, sans-serif;
+        }
+
+        #app {
+            position: relative;
+            width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            perspective: 1200px;
+        }
+
+        /* 第一阶段：输入 UI */
+        #input-screen {
+            position: absolute; z-index: 100; text-align: center; color: white;
+        }
+        #input-screen input {
+            padding: 12px; border-radius: 8px; border: none;
+            width: 200px; margin-bottom: 20px; font-size: 16px; text-align: center;
+        }
+        .btn-primary {
+            padding: 10px 40px; background: #e63946; color: white;
+            border: none; border-radius: 25px; cursor: pointer;
+            font-size: 16px; font-weight: bold; box-shadow: 0 4px 15px rgba(230,57,70,0.4);
+        }
+
+        /* 第二阶段：卡包 UI */
+        .pack-wrapper {
+            position: absolute; width: 280px; height: 500px;
+            z-index: 50; display: none;
+        }
+        .pack-top {
+            width: 100%; height: 80px; background-color: #555;
+            background-image: url('pack-top.png'); background-position: center; background-size: cover;
+            transition: all 0.7s cubic-bezier(0.6, -0.28, 0.735, 0.045);
+            transform-origin: left bottom; position: relative; z-index: 52; cursor: pointer;
+        }
+        .pack-top::after {
+            content: "➔ 划开密封条"; position: absolute; bottom: 10px; left: 50%;
+            transform: translateX(-50%); color: rgba(255,255,255,0.9); font-size: 12px;
+        }
+        .pack-body {
+            width: 100%; height: 420px; background-color: #333;
+            background-image: url('pack-body.png'); background-position: center; background-size: cover;
+            transition: all 0.8s ease-in;
+        }
+
+        .is-opened .pack-top { transform: rotate(-15deg) translate(120%, -150%); opacity: 0; }
+        .is-opened .pack-body { transform: translateY(120%); opacity: 0; }
+
+        /* 第三阶段：球星卡 & 生成按钮 */
+        #card-scene {
+            display: none; flex-direction: column; align-items: center; z-index: 60;
+        }
+        .card-container {
+            width: var(--card-w); height: var(--card-h);
+            transform-style: preserve-3d; transition: transform 0.2s ease-out;
+        }
+        .card {
+            width: 100%; height: 100%; background-color: #222;
+            background-image: url('card.jpg'); background-position: center; background-size: cover; background-repeat: no-repeat;
+            border-radius: 12px; box-shadow: 0 0 30px rgba(255,255,255,0.2), 0 20px 50px rgba(0,0,0,0.9);
+            position: relative;
+        }
+        .player-name-label {
+            position: absolute; bottom: 30px; width: 100%; text-align: center;
+            color: white; font-weight: bold; font-size: 24px;
+            text-shadow: 2px 2px 10px rgba(0,0,0,0.8); pointer-events: none;
+        }
+        
+        .download-btn {
+            margin-top: 40px; padding: 12px 30px; background: #f1faee;
+            color: #1d3557; border: none; border-radius: 25px;
+            font-size: 15px; font-weight: bold; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(255,255,255,0.2); transition: transform 0.1s;
+        }
+        .download-btn:active { transform: scale(0.95); }
+
+        /* 第四阶段：海报弹窗 */
+        #poster-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); z-index: 999;
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+        }
+        #result-img {
+            max-width: 85%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .hint-text {
+            color: #a8dadc; margin-top: 20px; font-size: 14px; letter-spacing: 1px;
+            animation: pulse 1.5s infinite;
+        }
+        .close-btn {
+            margin-top: 30px; padding: 8px 20px; background: transparent;
+            color: white; border: 1px solid white; border-radius: 20px; cursor: pointer;
+        }
+        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="input-screen">
+        <input type="text" id="playerName" placeholder="输入球员姓名">
+        <br>
+        <button class="btn-primary" onclick="startExperience()">开启球星卡包</button>
+    </div>
+
+    <div class="pack-wrapper" id="pack">
+        <div class="pack-top"></div>
+        <div class="pack-body"></div>
+    </div>
+
+    <div id="card-scene">
+        <div class="card-container" id="cardContainer">
+            <div class="card" id="cardElement">
+                <div class="player-name-label" id="cardLabel"></div>
+            </div>
+        </div>
+        <button class="download-btn" onclick="generatePoster()">📸 生成我的专属卡片</button>
+    </div>
+</div>
+
+<div id="poster-modal">
+    <img id="result-img" src="" alt="专属球星卡">
+    <div class="hint-text">👇 长按上方图片保存到手机相册 👇</div>
+    <button class="close-btn" onclick="closeModal()">返回</button>
+</div>
+
+<script>
+    const pack = document.getElementById('pack');
+    const inputScreen = document.getElementById('input-screen');
+    const cardScene = document.getElementById('card-scene');
+    const cardContainer = document.getElementById('cardContainer');
+    const cardElement = document.getElementById('cardElement');
+    const cardLabel = document.getElementById('cardLabel');
+    const posterModal = document.getElementById('poster-modal');
+    const resultImg = document.getElementById('result-img');
+
+    // 1. 开始体验
+    function startExperience() {
+        const name = document.getElementById('playerName').value;
+        if (!name) { alert('请输入姓名！'); return; }
+        cardLabel.innerText = name;
+        inputScreen.style.display = 'none';
+        pack.style.display = 'block';
+    }
+
+    // 2. 划开逻辑修复
+    let startX = 0;
+    let isDragging = false;
+    const packTop = document.querySelector('.pack-top');
+    
+    const handleStart = (e) => {
+        isDragging = true;
+        startX = e.touches ? e.touches[0].clientX : e.clientX;
+    };
+    
+    const handleEnd = (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        let endX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+        
+        // 修复2：缩短触发距离为 50px，更易触发
+        if (endX - startX > 50) triggerOpen();
+    };
+
+    packTop.addEventListener('touchstart', handleStart);
+    packTop.addEventListener('touchend', handleEnd);
+    
+    // 修复3：将鼠标松开事件绑定到整个 window 窗口，防止拖拽过快脱靶
+    packTop.addEventListener('mousedown', handleStart);
+    window.addEventListener('mouseup', handleEnd); 
+
+    function triggerOpen() {
+        pack.classList.add('is-opened');
+        setTimeout(() => {
+            pack.style.display = 'none';
+            cardScene.style.display = 'flex';
+            initCardInteraction();
+        }, 800);
+    }
+
+    // 3. 3D 互动
+    function initCardInteraction() {
+        const handleMove = (e) => {
+            if (cardScene.style.display !== 'flex') return;
+            const x = e.touches ? e.touches[0].clientX : e.clientX;
+            const y = e.touches ? e.touches[0].clientY : e.clientY;
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+            const rotY = (x - centerX) / 10;
+            const rotX = (centerY - y) / 10;
+            cardContainer.style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg) scale(1.05)`;
+        };
+        const handleReset = () => {
+            cardContainer.style.transform = `rotateX(0deg) rotateY(0deg) scale(1)`;
+        };
+        document.addEventListener('touchmove', handleMove);
+        document.addEventListener('touchend', handleReset);
+        document.addEventListener('mousemove', handleMove);
+        document.addEventListener('mouseleave', handleReset);
+    }
+
+    // 4. 生成海报
+    function generatePoster() {
+        cardContainer.style.transform = `rotateX(0deg) rotateY(0deg) scale(1)`;
+        setTimeout(() => {
+            html2canvas(cardElement, { scale: 2, backgroundColor: null, useCORS: true }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                resultImg.src = imgData;
+                posterModal.style.display = 'flex';
+            });
+        }, 200);
+    }
+
+    function closeModal() {
+        posterModal.style.display = 'none';
+    }
+</script>
+
+</body>
+</html>
